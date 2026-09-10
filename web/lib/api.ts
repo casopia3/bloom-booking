@@ -36,10 +36,44 @@ export interface Provider {
   latitude: number | null;
   longitude: number | null;
   supportsVipHome: boolean;
+  vipServiceRadiusKm: number | null;
+  vipTravelFee: string | null; // Decimal from DB
   isVerified: boolean;
   isEnabled: boolean;
   galleryImages: { id: string; url: string }[];
   distanceKm?: number | null; // present only when lat/lng were passed to list()
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  description: string | null;
+  durationMin: number;
+  price: number;
+  imageUrl: string | null;
+  category: string | null;
+  availableStandard: boolean;
+  availableVip: boolean;
+}
+
+export interface Specialist {
+  id: string;
+  name: string;
+  specialty: string;
+  bio: string | null;
+  photoUrl: string | null;
+  supportsVipHome: boolean;
+}
+
+export interface Review {
+  id: string;
+  rating: number;
+  comment: string | null;
+  photoUrl: string | null;
+  customer: {
+    name: string;
+  };
+  createdAt: string;
 }
 
 export const api = {
@@ -82,9 +116,6 @@ export const api = {
   },
 
   providers: {
-    // Public endpoint — only returns verified+enabled providers (enforced
-    // server-side). Now supports real search, category filtering, and
-    // distance-based sorting — no longer decorative on the frontend.
     list: (params: { search?: string; category?: string; lat?: number; lng?: number } = {}) => {
       const query = new URLSearchParams();
       if (params.search) query.set('search', params.search);
@@ -96,6 +127,12 @@ export const api = {
     },
 
     getOne: (id: string) => request<Provider>(`/providers/${id}`),
+
+    getServices: (providerId: string) => request<Service[]>(`/providers/${providerId}/services`),
+
+    getSpecialists: (providerId: string) => request<Specialist[]>(`/providers/${providerId}/specialists`),
+
+    getReviews: (providerId: string) => request<Review[]>(`/reviews?serviceProviderId=${providerId}`),
   },
 };
 
