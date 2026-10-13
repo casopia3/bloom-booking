@@ -13,7 +13,10 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { FavouritesModule } from './favourites/favourites.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
-
+import { ProviderApplicationsModule } from './provider-applications/provider-applications.module';
+import { PromotionsModule } from './promotions/promotions.module';
+import { SmsModule } from './sms/sms.module';
+import { PaymentsModule } from './payments/payments.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -30,6 +33,10 @@ import { AdminModule } from './admin/admin.module';
     FavouritesModule,
     NotificationsModule,
     AdminModule,
+        ProviderApplicationsModule,
+        PromotionsModule,
+        SmsModule,
+        PaymentsModule,
   ],
 })
 export class AppModule {}

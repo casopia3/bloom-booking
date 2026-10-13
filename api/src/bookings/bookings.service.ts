@@ -191,6 +191,14 @@ export class BookingsService {
     }
   }
 
+ // PATCH for api/src/bookings/bookings.service.ts
+//
+// Replace findOne() and findMany()'s `customer: true` include with a
+// scoped select that also pulls phone/email from the related User —
+// needed for Booking Details and Customer Information screens on the
+// Provider Dashboard. Only { phone, email } are selected from User —
+// never passwordHash, otpCode, or reset-token fields.
+
   async findOne(bookingId: string, requester: RequestingUser) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
@@ -199,7 +207,11 @@ export class BookingsService {
         location: true,
         payment: true,
         review: true,
-        customer: true,
+        customer: {
+          include: {
+            user: { select: { phone: true, email: true } },
+          },
+        },
         specialist: true,
         provider: true,
       },
@@ -216,7 +228,17 @@ export class BookingsService {
     const where = await this.buildAuthorizedWhere(filters, requester);
     return this.prisma.booking.findMany({
       where,
-      include: { services: { include: { service: true } }, location: true },
+      include: {
+        services: { include: { service: true } },
+        location: true,
+        provider: true,
+        specialist: true,
+        customer: {
+          include: {
+            user: { select: { phone: true, email: true } },
+          },
+        },
+      },
       orderBy: { scheduledAt: 'desc' },
     });
   }
@@ -332,8 +354,9 @@ export class BookingsService {
       throw new BadRequestException('Specialist does not belong to this provider');
     }
 
+    const isVip = booking.bookingType === BookingType.VIP_HOME;
     const nextStatus =
-      booking.status === BookingStatus.PENDING || booking.status === BookingStatus.CONFIRMED
+      isVip && (booking.status === BookingStatus.PENDING || booking.status === BookingStatus.CONFIRMED)
         ? BookingStatus.SPECIALIST_ASSIGNED
         : booking.status;
 
@@ -356,7 +379,6 @@ export class BookingsService {
 
     return updated;
   }
-
   async updateStatus(bookingId: string, dto: UpdateBookingStatusDto, requester: RequestingUser) {
     const booking = await this.getBookingOr404(bookingId);
 

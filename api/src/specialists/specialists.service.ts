@@ -1,12 +1,16 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSpecialistDto } from './dto/create-specialist.dto';
 import { UpdateSpecialistDto } from './dto/update-specialist.dto';
+
+const SALT_ROUNDS = 10;
 
 interface RequestingUser {
   userId: string;
@@ -35,19 +39,44 @@ export class SpecialistsService {
   }
 
   // ── Provider-admin manages their own staff ──────────────
+  // Creates the User (role SPECIALIST) and the Specialist row together —
+  // there is no pre-existing account to attach to, unlike the old shape.
+  // Wrapped in a transaction so a failure partway through never leaves a
+  // User with no matching Specialist.
   async create(providerId: string, dto: CreateSpecialistDto, requester: RequestingUser) {
     await this.assertProviderOwnerOrSuperAdmin(providerId, requester);
 
-    return this.prisma.specialist.create({
-      data: {
-        userId: dto.userId,
-        serviceProviderId: providerId,
-        name: dto.name,
-        specialty: dto.specialty,
-        bio: dto.bio,
-        photoUrl: dto.photoUrl,
-        supportsVipHome: dto.supportsVipHome ?? false,
-      },
+    const existingUser = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
+    if (existingUser) {
+      throw new ConflictException('An account with this phone number already exists');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.temporaryPassword, SALT_ROUNDS);
+
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          phone: dto.phone,
+          passwordHash,
+          role: UserRole.SPECIALIST,
+          // Set true immediately: the provider-admin is vouching for this
+          // phone number, not the specialist proving ownership via OTP —
+          // see the DTO's comment for the reasoning.
+          phoneVerified: true,
+        },
+      });
+
+      return tx.specialist.create({
+        data: {
+          userId: user.id,
+          serviceProviderId: providerId,
+          name: dto.name,
+          specialty: dto.specialty,
+          bio: dto.bio,
+          photoUrl: dto.photoUrl,
+          supportsVipHome: dto.supportsVipHome ?? false,
+        },
+      });
     });
   }
 

@@ -5,24 +5,36 @@ export function ProviderCard({ provider }: { provider: Provider }) {
   return (
     <Link
       href={`/providers/${provider.id}`}
-      className="block overflow-hidden rounded-card border border-gray-100 bg-white shadow-sm transition-shadow hover:shadow-md"
+      className="group block overflow-hidden rounded-card border border-gray-100 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
     >
-      <div className="flex h-36 items-center justify-center bg-bloom-100">
+      <div className="flex h-40 items-center justify-center overflow-hidden bg-bloom-100">
         {provider.galleryImages[0] ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={provider.galleryImages[0].url} alt={provider.businessName} className="h-full w-full object-cover" />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={
+                provider.galleryImages[0].url.startsWith('http')
+                  ? provider.galleryImages[0].url
+                  : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}${provider.galleryImages[0].url}`
+              }
+              alt={provider.businessName}
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+          </>
         ) : (
           <span className="font-display text-lg text-bloom-400">{provider.businessName}</span>
         )}
       </div>
-      <div className="p-4">
+      <div className="p-5">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="font-semibold text-gray-900">{provider.businessName}</h3>
+          <h3 className="font-display text-base font-semibold text-gray-900">
+  {provider.businessName}
+</h3>
           {provider.distanceKm != null && (
-            <span className="whitespace-nowrap text-sm font-medium text-bloom-500">{provider.distanceKm} km</span>
+            <span className="whitespace-nowrap rounded-full bg-bloom-50 px-2.5 py-1 text-xs font-semibold text-bloom-600">{provider.distanceKm} km</span>
           )}
         </div>
-        <p className="mt-1 flex items-center gap-1 text-sm text-gray-500">
+        <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-500">
           <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
             <path
               fillRule="evenodd"
@@ -33,7 +45,7 @@ export function ProviderCard({ provider }: { provider: Provider }) {
           {provider.address}
         </p>
         {provider.supportsVipHome && (
-          <span className="mt-2 inline-block rounded-full bg-bloom-100 px-2.5 py-0.5 text-xs font-medium text-bloom-600">
+          <span className="mt-3 inline-block rounded-full bg-bloom-100 px-3 py-1 text-xs font-semibold text-bloom-600">
             VIP Home Service available
           </span>
         )}

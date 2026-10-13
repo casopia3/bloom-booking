@@ -114,6 +114,10 @@ model ServiceProvider {
   address      String
   latitude     Float?
   longitude    Float?
+  // Gap #2 from the original master prompt — business category tags,
+  // matching the Figma's multi-select chips (e.g. Haircut, Makeup).
+  category     String[] @default([])
+  website      String?
 
   supportsVipHome   Boolean @default(false)
   vipServiceRadiusKm Float?
@@ -348,6 +352,38 @@ model Favourite {
   @@unique([customerId, serviceProviderId])
 }
 
+enum ProviderApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// A prospective salon's request to join the platform. Deliberately NOT
+// linked to User via a Prisma relation — createdUserId is a plain,
+// unenforced reference set only after approval, so this model can be
+// added without touching the User model at all (see project decision:
+// provider onboarding is now application-and-approval, not public
+// self-registration; specialist self-service creation is still deferred).
+model ProviderApplication {
+  id           String  @id @default(cuid())
+  businessName String
+  contactName  String
+  phone        String
+  email        String?
+  address      String
+  about        String?
+  category     String[] @default([])
+
+  status ProviderApplicationStatus @default(PENDING)
+
+  // Set on approval to the id of the User created for this applicant.
+  // Not a Prisma relation on purpose — see comment above.
+  createdUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Notification {
   id     String @id @default(cuid())
   userId String
@@ -362,4 +398,23 @@ model Notification {
   relatedBooking   Booking? @relation(fields: [relatedBookingId], references: [id])
 
   createdAt DateTime @default(now())
+}
+model Promotion {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  discount    String?
+  buttonText  String   @default("Explore")
+  category    String?
+  imageUrl    String?
+  startDate   DateTime?
+  endDate     DateTime?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([startDate, endDate])
+  @@index([sortOrder])
 }

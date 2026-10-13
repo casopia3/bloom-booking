@@ -1,3 +1,4 @@
+
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
@@ -8,27 +9,50 @@ export class RedisService implements OnModuleDestroy {
   public readonly client: Redis;
 
   constructor(config: ConfigService) {
-    this.client = new Redis(config.get<string>('REDIS_URL') ?? 'redis://localhost:6379', {
-      // Limits retry spam to a fixed number of attempts with backoff,
-      // instead of hammering the connection every second forever.
-      retryStrategy: (times) => {
-        if (times > 5) return null; // stop retrying after 5 attempts
-        return Math.min(times * 500, 3000);
-      },
-      maxRetriesPerRequest: 1, // fail fast per-command instead of queuing forever
+    const redisUrl = config.get<string>('REDIS_URL');
+
+    if (!redisUrl) {
+      throw new Error(
+        'REDIS_URL is missing. Configure your Redis connection in the API .env file.',
+      );
+    }
+
+    this.client = new Redis(redisUrl, {
+      // Keep reconnecting after temporary network or Upstash failures.
+      retryStrategy: (times: number) => Math.min(times * 500, 5000),
+
+      // Fail commands promptly when Redis cannot respond.
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+
+      // Connection health and network settings.
+      enableReadyCheck: true,
+      connectTimeout: 10000,
+      keepAlive: 10000,
     });
 
-    // Log once per state change instead of letting ioredis's default
-    // unhandled-error spam flood the console every reconnect attempt.
-    this.client.on('error', (err) => {
+    this.client.on('connect', () => {
+      this.logger.log('Redis TCP connection established');
+    });
+
+    this.client.on('ready', () => {
+      this.logger.log('Redis is ready to accept commands');
+    });
+
+    this.client.on('reconnecting', (delay: number) => {
+      this.logger.warn(`Redis reconnecting in ${delay}ms`);
+    });
+
+    this.client.on('error', (err: Error) => {
       this.logger.warn(`Redis connection issue: ${err.message}`);
     });
-    this.client.on('connect', () => {
-      this.logger.log('Redis connected');
+
+    this.client.on('end', () => {
+      this.logger.warn('Redis connection ended');
     });
   }
 
-  onModuleDestroy() {
-    this.client.disconnect();
+  async onModuleDestroy(): Promise<void> {
+    await this.client.disconnect();
   }
 }

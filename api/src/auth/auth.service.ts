@@ -15,17 +15,20 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto, ResendOtpDto } from './dto/verify-otp.dto';
 import { RequestPasswordResetDto, ConfirmPasswordResetDto } from './dto/password-reset.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { SmsService } from '../sms/sms.service';
 
 const OTP_TTL_MINUTES = 5;
 const SALT_ROUNDS = 10;
 
 @Injectable()
 export class AuthService {
-  constructor(
-    private prisma: PrismaService,
-    private jwt: JwtService,
-    private config: ConfigService,
-  ) {}
+ constructor(
+  private prisma: PrismaService,
+  private jwt: JwtService,
+  private config: ConfigService,
+  private smsService: SmsService,
+) {}
 
   // --- Registration ---
   async register(dto: RegisterDto) {
@@ -59,23 +62,39 @@ export class AuthService {
     return crypto.randomInt(100000, 999999).toString(); // 6-digit code
   }
 
-  private async issueAndStoreOtp(userId: string) {
-    const code = this.generateOtpCode();
-    const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
+private async issueAndStoreOtp(userId: string) {
+  const code = this.generateOtpCode();
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { otpCode: code, otpExpiresAt: expiresAt },
-    });
+  const expiresAt = new Date(
+    Date.now() + OTP_TTL_MINUTES * 60 * 1000,
+  );
 
-    // TODO: integrate SMS provider to actually deliver `code` to the user's phone.
-    // No SMS provider is specified in the original docs or mockup —
-    // requires client confirmation per spec principle #5.
-    // Logging in dev only; never log OTP codes in production.
-    if (this.config.get('NODE_ENV') !== 'production') {
-      console.log(`[DEV ONLY] OTP for user ${userId}: ${code}`);
-    }
+  const user = await this.prisma.user.update({
+    where: { id: userId },
+    data: {
+      otpCode: code,
+      otpExpiresAt: expiresAt,
+    },
+    select: {
+      id: true,
+      phone: true,
+    },
+  });
+
+  // SMSEthiopia expects:
+  // 2519XXXXXXXX or 2517XXXXXXXX
+  // without the leading +.
+  const msisdn = user.phone.replace(/^\+/, '');
+
+  const message = `Your Bloom Booking verification code is ${code}. It expires in ${OTP_TTL_MINUTES} minutes.`;
+
+  await this.smsService.sendSms(msisdn, message);
+
+  if (this.config.get('NODE_ENV') !== 'production') {
+    console.log(`[DEV ONLY] OTP sent to user ${user.id}`);
   }
+}
+
 
   async resendOtp(dto: ResendOtpDto) {
     const user = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
@@ -164,5 +183,24 @@ export class AuthService {
     });
 
     return { message: 'Password reset successful' };
+  }
+
+  // --- Change password (authenticated — distinct from the OTP-based
+  // forgot-password flow above, which is for someone locked out; this is
+  // for an already-signed-in user who knows their current password). ---
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const matches = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!matches) throw new UnauthorizedException('Current password is incorrect');
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, SALT_ROUNDS);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
+    });
+
+    return { message: 'Password changed successfully' };
   }
 }

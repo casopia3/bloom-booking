@@ -2,6 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-white text-gray-900;
+/* Bloom global typography */
+@layer base {
+  html {
+    font-family: var(--font-inter), Arial, sans-serif;
+  }
+
+  body {
+    @apply bg-white text-gray-900;
+    font-family: var(--font-inter), Arial, sans-serif;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+}
+
+/* Keep all Bloom font utility classes consistent */
+.font-sans,
+.font-display {
+  font-family: var(--font-inter), Arial, sans-serif !important;
+}
+
+/* Bloom logo animation */
+.bloom-logo-hover {
+  transition: transform 0.4s ease, filter 0.4s ease;
+  animation: bloom-logo-enter 0.9s ease-out both;
+}
+
+.bloom-logo-hover:hover {
+  animation: bloom-logo-spin 1.5s linear infinite;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.08));
+}
+
+@keyframes bloom-logo-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.94);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes bloom-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Bloom headline animation */
+.bloom-headline {
+  animation: bloom-headline-enter 0.8s ease-out 0.25s both;
+}
+
+@keyframes bloom-headline-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

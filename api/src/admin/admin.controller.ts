@@ -1,4 +1,13 @@
-import { Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -52,4 +61,61 @@ export class AdminController {
   disableUser(@Param('id') id: string) {
     return this.adminService.setUserActive(id, false);
   }
+    @Get('promotions')
+  findAllPromotions() {
+    return this.adminService.findAllPromotions();
+  }
+
+  @Post('promotions')
+  createPromotion(@Body() body: {
+    title: string;
+    description?: string;
+    discount?: string;
+    buttonText?: string;
+    category?: string;
+    imageUrl?: string;
+    startDate?: string;
+    endDate?: string;
+    isActive?: boolean;
+    sortOrder?: number;
+  }) {
+    return this.adminService.createPromotion(body);
+  }
+
+  @Patch('promotions/:id')
+  updatePromotion(
+    @Param('id') id: string,
+    @Body() body: {
+      title?: string;
+      description?: string;
+      discount?: string;
+      buttonText?: string;
+      category?: string;
+      imageUrl?: string;
+      startDate?: string;
+      endDate?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    },
+  ) {
+    return this.adminService.updatePromotion(id, body);
+  }
+
+  @Delete('promotions/:id')
+  deletePromotion(@Param('id') id: string) {
+    return this.adminService.deletePromotion(id);
+  }
+  @Patch('providers/:id/enable')
+enableProvider(@Param('id') id: string) {
+  return this.adminService.setProviderEnabled(id, true);
+}
+
+@Patch('providers/:id/disable')
+disableProvider(@Param('id') id: string) {
+  return this.adminService.setProviderEnabled(id, false);
+}
+@Get('services')
+findAllServices() {
+  return this.adminService.findAllServices();
+}
 }

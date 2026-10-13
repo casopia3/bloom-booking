@@ -1,9 +1,12 @@
-import { Body, Controller, Post, HttpCode, HttpStatus } from '@nestjs/common';
+import { Body, Controller, Post, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto, ResendOtpDto } from './dto/verify-otp.dto';
 import { RequestPasswordResetDto, ConfirmPasswordResetDto } from './dto/password-reset.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -42,5 +45,14 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   confirmPasswordReset(@Body() dto: ConfirmPasswordResetDto) {
     return this.authService.confirmPasswordReset(dto);
+  }
+
+  // Authenticated — distinct from password-reset/* above, which is for a
+  // locked-out user with no current password to verify.
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  changePassword(@Body() dto: ChangePasswordDto, @CurrentUser() user: { userId: string }) {
+    return this.authService.changePassword(user.userId, dto);
   }
 }

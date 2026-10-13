@@ -1,4 +1,4 @@
-import { IsBoolean, IsNumber, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsNumber, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateProviderDto {
   // The user account this provider profile attaches to — created separately
@@ -17,6 +17,15 @@ export class CreateProviderDto {
 
   @IsString()
   address!: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  category?: string[];
+
+  @IsOptional()
+  @IsString()
+  website?: string;
 
   @IsOptional()
   @IsNumber()

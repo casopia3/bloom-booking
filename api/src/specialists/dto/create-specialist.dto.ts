@@ -1,18 +1,26 @@
 import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateSpecialistDto {
-  // As with providers, specialist accounts are provisioned by an existing
-  // provider-admin against an already-created user account — not self-registered
-  // (same confirmed decision as provider onboarding).
+  // Specialist accounts are provisioned directly by their own provider-admin
+  // (no super-admin approval needed, unlike provider onboarding — a salon
+  // owner adding their own staff doesn't need marketplace-level vetting).
+  // The provider-admin sets a temporary password directly rather than the
+  // specialist self-claiming via OTP; phoneVerified is set true on creation
+  // since the provider is vouching for the phone, not the specialist
+  // proving ownership of it themselves.
   @IsString()
-  userId: string;
+  phone!: string;
+
+  @IsString()
+  @MinLength(8)
+  temporaryPassword!: string;
 
   @IsString()
   @MinLength(2)
-  name: string;
+  name!: string;
 
   @IsString()
-  specialty: string; // "Hairstylist", "Makeup Artist", "Nail Technician"
+  specialty!: string;
 
   @IsOptional()
   @IsString()

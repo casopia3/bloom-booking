@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { OtpInput } from '@/components/ui/OtpInput';
 import { api, ApiError } from '@/lib/api';
 import { auth } from '@/lib/auth';
 
-export default function VerifyOtpPage() {
+function VerifyOtpContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const phone = searchParams.get('phone') || '';
@@ -70,5 +70,19 @@ export default function VerifyOtpPage() {
         Verify
       </Button>
     </main>
+  );
+}
+
+export default function VerifyOtpPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-white px-6">
+          <p className="text-gray-500">Loading…</p>
+        </main>
+      }
+    >
+      <VerifyOtpContent />
+    </Suspense>
   );
 }

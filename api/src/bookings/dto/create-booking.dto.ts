@@ -14,13 +14,13 @@ import { BookingType } from '@prisma/client';
 
 class VipLocationDto {
   @IsString()
-  address: string;
+  address!: string;
 
   @IsNumber()
-  latitude: number;
+  latitude!: number;
 
   @IsNumber()
-  longitude: number;
+  longitude!: number;
 
   @IsOptional()
   @IsString()
@@ -29,7 +29,7 @@ class VipLocationDto {
 
 export class CreateBookingDto {
   @IsString()
-  serviceProviderId: string;
+  serviceProviderId!: string;
 
   // Optional at creation — supports service-first flow where no specialist
   // is chosen yet (provider assigns later). Required for VIP per blueprint
@@ -41,13 +41,13 @@ export class CreateBookingDto {
   @IsArray()
   @ArrayMinSize(1)
   @IsString({ each: true })
-  serviceIds: string[];
+  serviceIds!: string[];
 
   @IsEnum(BookingType)
-  bookingType: BookingType;
+  bookingType!: BookingType;
 
   @IsDateString()
-  scheduledAt: string; // ISO datetime for the slot start
+  scheduledAt!: string; // ISO datetime for the slot start
 
   @ValidateIf((o) => o.bookingType === BookingType.VIP_HOME)
   @ValidateNested()
