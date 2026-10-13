@@ -1,3 +1,4 @@
+
 import {
   BadRequestException,
   ConflictException,
@@ -7,8 +8,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { ProviderApplicationStatus, UserRole } from '@prisma/client';
+import {
+  ProviderApplicationStatus,
+  UserRole,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { SmsService } from '../sms/sms.service';
 import { CreateProviderApplicationDto } from './dto/create-provider-application.dto';
 import { ClaimProviderAccountDto } from './dto/claim-provider-account.dto';
 
@@ -20,9 +25,9 @@ export class ProviderApplicationsService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    private smsService: SmsService,
   ) {}
 
-  // ── Public: submit an application ─────────────────────────
   async apply(dto: CreateProviderApplicationDto) {
     return this.prisma.providerApplication.create({
       data: {
@@ -37,7 +42,6 @@ export class ProviderApplicationsService {
     });
   }
 
-  // ── Super-admin: review queue ──────────────────────────────
   async findAll(status?: ProviderApplicationStatus) {
     return this.prisma.providerApplication.findMany({
       where: status ? { status } : undefined,
@@ -46,21 +50,31 @@ export class ProviderApplicationsService {
   }
 
   async findOne(id: string) {
-    const application = await this.prisma.providerApplication.findUnique({ where: { id } });
-    if (!application) throw new NotFoundException('Application not found');
+    const application =
+      await this.prisma.providerApplication.findUnique({
+        where: { id },
+      });
+
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
     return application;
   }
 
-  // ── Super-admin: approve ───────────────────────────────────
   async approve(id: string) {
     const application = await this.findOne(id);
+
     if (application.status !== ProviderApplicationStatus.PENDING) {
-      throw new BadRequestException('Only pending applications can be approved');
+      throw new BadRequestException(
+        'Only pending applications can be approved',
+      );
     }
 
     const existingUser = await this.prisma.user.findUnique({
       where: { phone: application.phone },
     });
+
     if (existingUser) {
       throw new ConflictException(
         'An account with this phone number already exists — cannot auto-create a provider account',
@@ -88,52 +102,143 @@ export class ProviderApplicationsService {
         businessName: application.businessName,
         about: application.about,
         address: application.address,
-         category: application.category,
+        category: application.category,
         isVerified: true,
       },
     });
 
-    await this.issueClaimCode(user.id);
+    // Save approval before attempting SMS delivery.
+    const approvedApplication =
+      await this.prisma.providerApplication.update({
+        where: { id },
+        data: {
+          status: ProviderApplicationStatus.APPROVED,
+          createdUserId: user.id,
+        },
+      });
 
-    return this.prisma.providerApplication.update({
-      where: { id },
-      data: { status: ProviderApplicationStatus.APPROVED, createdUserId: user.id },
-    });
+    let claimSmsSent = false;
+
+    try {
+      await this.issueClaimCode(user.id);
+      claimSmsSent = true;
+    } catch {
+      // The application remains approved. Super Admin can retry.
+      console.error(
+        'Provider claim SMS failed. Use the resend claim code endpoint.',
+      );
+    }
+
+    return {
+      ...approvedApplication,
+      claimSmsSent,
+      claimMessage: claimSmsSent
+        ? 'Provider approved and claim code SMS accepted by the SMS provider.'
+        : 'Provider approved, but SMS delivery could not be initiated. Resend the claim code.',
+    };
   }
 
-  // ── Super-admin: reject ────────────────────────────────────
+  async resendClaimCode(id: string) {
+    const application = await this.findOne(id);
+
+    if (application.status !== ProviderApplicationStatus.APPROVED) {
+      throw new BadRequestException(
+        'Only approved applications can receive a claim code',
+      );
+    }
+
+    if (!application.createdUserId) {
+      throw new BadRequestException(
+        'No provider account is linked to this application',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: application.createdUserId },
+      select: {
+        id: true,
+        phoneVerified: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(
+        'Provider account associated with this application was not found',
+      );
+    }
+
+    if (user.phoneVerified) {
+      throw new BadRequestException(
+        'This account has already been claimed. The provider should sign in.',
+      );
+    }
+
+    await this.issueClaimCode(user.id);
+
+    return {
+      message: 'A new provider claim code was submitted to the SMS provider.',
+      sent: true,
+    };
+  }
+
   async reject(id: string) {
     const application = await this.findOne(id);
+
     if (application.status !== ProviderApplicationStatus.PENDING) {
-      throw new BadRequestException('Only pending applications can be rejected');
+      throw new BadRequestException(
+        'Only pending applications can be rejected',
+      );
     }
+
     return this.prisma.providerApplication.update({
       where: { id },
       data: { status: ProviderApplicationStatus.REJECTED },
     });
   }
 
-  // ── Public: claim the account created on approval ──────────
   async claimAccount(dto: ClaimProviderAccountDto) {
-    const user = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
-    if (!user) throw new NotFoundException('No account found for this phone number');
+    const user = await this.prisma.user.findUnique({
+      where: { phone: dto.phone },
+    });
+
+    if (!user) {
+      throw new NotFoundException(
+        'No account found for this phone number',
+      );
+    }
+
+    if (user.role !== UserRole.PROVIDER_ADMIN) {
+      throw new BadRequestException(
+        'This claim process is only for provider accounts',
+      );
+    }
 
     if (user.phoneVerified) {
       throw new BadRequestException(
         'This account has already been claimed — use Sign In instead',
       );
     }
+
     if (!user.otpCode || !user.otpExpiresAt) {
-      throw new BadRequestException('No claim code was issued for this account');
+      throw new BadRequestException(
+        'No claim code was issued for this account',
+      );
     }
+
     if (user.otpExpiresAt < new Date()) {
-      throw new BadRequestException('Claim code has expired — contact support for a new one');
+      throw new BadRequestException(
+        'Claim code has expired — contact support for a new one',
+      );
     }
+
     if (user.otpCode !== dto.code) {
       throw new BadRequestException('Invalid claim code');
     }
 
-    const passwordHash = await bcrypt.hash(dto.newPassword, SALT_ROUNDS);
+    const passwordHash = await bcrypt.hash(
+      dto.newPassword,
+      SALT_ROUNDS,
+    );
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -145,21 +250,46 @@ export class ProviderApplicationsService {
       },
     });
 
-    return { message: 'Account claimed — you can now sign in' };
+    return {
+      message: 'Account claimed — you can now sign in',
+    };
   }
 
-  // ── Internal ────────────────────────────────────────────────
   private async issueClaimCode(userId: string) {
-    const code = crypto.randomInt(100000, 999999).toString();
-    const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
+    // The upper bound is exclusive, so this generates all
+    // six-digit values from 100000 through 999999.
+    const code = crypto.randomInt(100000, 1000000);
 
-    await this.prisma.user.update({
+    const expiresAt = new Date(
+      Date.now() + OTP_TTL_MINUTES * 60 * 1000,
+    );
+
+    const user = await this.prisma.user.update({
       where: { id: userId },
-      data: { otpCode: code, otpExpiresAt: expiresAt },
+      data: {
+        otpCode: String(code),
+        otpExpiresAt: expiresAt,
+      },
+      select: {
+        id: true,
+        phone: true,
+      },
     });
 
+    // SMSEthiopia expects 2519XXXXXXXX or 2517XXXXXXXX,
+    // without a leading plus sign.
+    const msisdn = user.phone.replace(/^\+/, '');
+
+    const message =
+      `Bloom Booking: Your provider account claim code is ${code}. ` +
+      `It expires in ${OTP_TTL_MINUTES} minutes. Do not share this code.`;
+
+    await this.smsService.sendSms(msisdn, message);
+
     if (this.config.get('NODE_ENV') !== 'production') {
-      console.log(`[DEV ONLY] Provider account claim code for user ${userId}: ${code}`);
+      console.log(
+        `[DEV] Provider claim SMS request completed for user ${user.id}`,
+      );
     }
   }
 }

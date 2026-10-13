@@ -57,6 +57,13 @@ export class ProviderApplicationsController {
     return this.service.approve(id);
   }
 
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.SUPER_ADMIN)
+@Post(':id/resend-claim-code')
+resendClaimCode(@Param('id') id: string) {
+  return this.service.resendClaimCode(id);
+}
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
   @Patch(':id/reject')
