@@ -182,7 +182,59 @@ export class ProviderApplicationsService {
       sent: true,
     };
   }
+    async resendClaimCodeByPhone(phone: string) {
+  const message =
+    'If this phone number matches an approved, unclaimed provider account, a new claim code will be sent if eligible. Please wait before trying again.';
 
+  const normalizedPhone = phone?.trim();
+
+  if (!normalizedPhone) {
+    return { message };
+  }
+
+  const user = await this.prisma.user.findUnique({
+    where: { phone: normalizedPhone },
+    select: {
+      id: true,
+      role: true,
+      phoneVerified: true,
+    },
+  });
+
+  if (
+    !user ||
+    user.role !== UserRole.PROVIDER_ADMIN ||
+    user.phoneVerified
+  ) {
+    return { message };
+  }
+
+  const application =
+    await this.prisma.providerApplication.findFirst({
+      where: {
+        createdUserId: user.id,
+        status: ProviderApplicationStatus.APPROVED,
+      },
+      select: { id: true },
+    });
+
+  if (!application) {
+    return { message };
+  }
+
+  try {
+    await this.issueClaimCode(user.id, true);
+  } catch (error) {
+    if (
+      !(error instanceof HttpException) ||
+      error.getStatus() !== HttpStatus.TOO_MANY_REQUESTS
+    ) {
+      console.error('Public provider claim-code resend failed.');
+    }
+  }
+
+  return { message };
+}
   async reject(id: string) {
     const application = await this.findOne(id);
 
@@ -270,31 +322,40 @@ export class ProviderApplicationsService {
   );
 
   const data = {
-    otpCode: String(code),
-    otpExpiresAt: expiresAt,
-  };
+  otpCode: String(code),
+  otpExpiresAt: expiresAt,
+  claimCodeLastSentAt: now,
+};
 
-  if (enforceCooldown) {
-    const updated = await this.prisma.user.updateMany({
-      where: {
-        id: userId,
-        phoneVerified: false,
-      },
-      data,
-    });
+if (enforceCooldown) {
+  const updated = await this.prisma.user.updateMany({
+    where: {
+      id: userId,
+      phoneVerified: false,
+      OR: [
+        { claimCodeLastSentAt: null },
+        {
+          claimCodeLastSentAt: {
+            lt: new Date(now.getTime() - cooldownMs),
+          },
+        },
+      ],
+    },
+    data,
+  });
 
   if (updated.count === 0) {
-  throw new HttpException(
-    'Please wait before requesting another claim code.',
-    HttpStatus.TOO_MANY_REQUESTS,
-  );
-}
-  } else {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data,
-    });
+    throw new HttpException(
+      'Please wait before requesting another claim code.',
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
+} else {
+  await this.prisma.user.update({
+    where: { id: userId },
+    data,
+  });
+}
 
   const user = await this.prisma.user.findUnique({
     where: { id: userId },

@@ -31,7 +31,10 @@ export class ProviderApplicationsController {
   claimAccount(@Body() dto: ClaimProviderAccountDto) {
     return this.service.claimAccount(dto);
   }
-
+  @Post('resend-claim-code')
+resendClaimCodeByPhone(@Body('phone') phone: string) {
+  return this.service.resendClaimCodeByPhone(phone);
+}
   // ── Super-admin review ───────────────────────────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
