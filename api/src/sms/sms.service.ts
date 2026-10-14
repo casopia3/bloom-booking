@@ -36,10 +36,11 @@ export class SmsService {
       if (!response.ok) {
         // Do not log or return the provider response body.
         // It may contain sensitive message details.
-        console.error(
-          'SMSEthiopia request failed with status:',
-          response.status,
-        );
+       console.error(
+  'SMSEthiopia request failed:',
+  response.status,
+  responseText.slice(0, 500),
+);
 
         throw new InternalServerErrorException(
           `SMSEthiopia rejected the SMS request (${response.status}).`,
