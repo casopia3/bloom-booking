@@ -186,16 +186,12 @@ if (showLanding) {
           <Button onClick={() => router.push('/sign-up')}>
             Find Salons &amp; Spa Services
           </Button>
-
-        
 <Button
   variant="secondary"
   onClick={() => router.push('/provider-application')}
 >
   Register Your Salon &amp; Spa Business
 </Button>
-
-
         </div>
 
         {/* Existing user sign-in */}
@@ -235,7 +231,7 @@ if (showLanding) {
     <div className="flex items-start justify-between gap-8">
       <div>
         <h1 className="font-display text-3xl font-semibold tracking-tight text-gray-900">
-          Hello, Bloom 
+          Hello, Bloom
         </h1>
 
         {locationLabel ? (
@@ -269,7 +265,7 @@ if (showLanding) {
         )}
       </div>
 
-   
+
     </div>
 
     {/* Desktop search */}
@@ -332,7 +328,7 @@ if (showLanding) {
     <div className="flex items-start justify-between">
       <div>
         <h1 className="font-display text-2xl font-semibold text-gray-900">
-          Hello, Bloom 
+          Hello, Bloom
         </h1>
 
         {locationLabel ? (

@@ -2,6 +2,8 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -255,41 +257,66 @@ export class ProviderApplicationsService {
     };
   }
 
-  private async issueClaimCode(userId: string) {
-    // The upper bound is exclusive, so this generates all
-    // six-digit values from 100000 through 999999.
-    const code = crypto.randomInt(100000, 1000000);
+ private async issueClaimCode(
+  userId: string,
+  enforceCooldown = false,
+) {
+  const now = new Date();
+  const cooldownMs = 60 * 1000;
+  const code = crypto.randomInt(100000, 1000000);
 
-    const expiresAt = new Date(
-      Date.now() + OTP_TTL_MINUTES * 60 * 1000,
-    );
+  const expiresAt = new Date(
+    now.getTime() + OTP_TTL_MINUTES * 60 * 1000,
+  );
 
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        otpCode: String(code),
-        otpExpiresAt: expiresAt,
+  const data = {
+    otpCode: String(code),
+    otpExpiresAt: expiresAt,
+  };
+
+  if (enforceCooldown) {
+    const updated = await this.prisma.user.updateMany({
+      where: {
+        id: userId,
+        phoneVerified: false,
       },
-      select: {
-        id: true,
-        phone: true,
-      },
+      data,
     });
 
-    // SMSEthiopia expects 2519XXXXXXXX or 2517XXXXXXXX,
-    // without a leading plus sign.
-    const msisdn = user.phone.replace(/^\+/, '');
-
-    const message =
-      `Bloom Booking: Your provider account claim code is ${code}. ` +
-      `It expires in ${OTP_TTL_MINUTES} minutes. Do not share this code.`;
-
-    await this.smsService.sendSms(msisdn, message);
-
-    if (this.config.get('NODE_ENV') !== 'production') {
-      console.log(
-        `[DEV] Provider claim SMS request completed for user ${user.id}`,
-      );
-    }
+  if (updated.count === 0) {
+  throw new HttpException(
+    'Please wait before requesting another claim code.',
+    HttpStatus.TOO_MANY_REQUESTS,
+  );
+}
+  } else {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data,
+    });
   }
+
+  const user = await this.prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, phone: true },
+  });
+
+  if (!user) {
+    throw new NotFoundException('Provider account not found.');
+  }
+
+  const msisdn = user.phone.replace(/^\+/, '');
+
+  const message =
+    `Bloom Booking: Your provider account claim code is ${code}. ` +
+    `It expires in ${OTP_TTL_MINUTES} minutes. Do not share this code.`;
+
+  await this.smsService.sendSms(msisdn, message);
+
+  if (this.config.get('NODE_ENV') !== 'production') {
+    console.log(
+      `[DEV] Provider claim SMS request completed for user ${user.id}`,
+    );
+  }
+}
 }

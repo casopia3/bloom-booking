@@ -379,6 +379,15 @@ export const api = {
         body: JSON.stringify(payload),
       }),
 
+resendClaimCode: (payload: { phone: string }) =>
+  request<{ message: string; sent?: boolean }>(
+    '/provider-applications/resend-claim-code',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  ),
+
     // ── Super-admin only ──────────────────────────────────
     findAll: (status?: ProviderApplicationStatus) => {
       const qs = status ? `?status=${status}` : '';

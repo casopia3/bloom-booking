@@ -78,6 +78,7 @@ model User {
   phoneVerified          Boolean   @default(false)
   otpCode                String?
   otpExpiresAt           DateTime?
+  claimCodeLastSentAt DateTime?
   passwordResetToken     String?   @unique
   passwordResetExpiresAt DateTime?
 

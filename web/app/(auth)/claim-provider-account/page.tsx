@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -29,22 +30,68 @@ export default function ClaimProviderAccountPage() {
 
   const [serverError, setServerError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [resendError, setResendError] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
 
   const {
     register,
     handleSubmit,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+
+    const timer = window.setTimeout(() => {
+      setCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
+
+  async function handleResendCode() {
+    const phone = getValues('phone').trim();
+
+    setResendMessage(null);
+    setResendError(null);
+
+    if (phone.length < 10) {
+      setResendError('Enter your application phone number first.');
+      return;
+    }
+
+    setResending(true);
+
+    try {
+      const result = await api.providerApplications.resendClaimCode({ phone });
+
+      setResendMessage(
+        result.message || 'If your approved provider account is eligible, a new code will be sent by SMS.',
+      );
+      setCooldown(60);
+    } catch (err) {
+      setResendError(
+        err instanceof ApiError
+          ? err.message
+          : 'Unable to request a new code. Please try again.',
+      );
+    } finally {
+      setResending(false);
+    }
+  }
 
   async function onSubmit(data: FormData) {
     setServerError(null);
 
     try {
       await api.providerApplications.claimAccount({
-        phone: data.phone,
-        code: data.code,
+        phone: data.phone.trim(),
+        code: data.code.trim(),
         newPassword: data.newPassword,
       });
 
@@ -115,14 +162,47 @@ export default function ClaimProviderAccountPage() {
           {...register('phone')}
         />
 
-        <Input
-          label="Verification Code"
-          placeholder="123456"
-          inputMode="numeric"
-          maxLength={6}
-          error={errors.code?.message}
-          {...register('code')}
-        />
+        <div>
+          <Input
+            label="Verification Code"
+            placeholder="123456"
+            inputMode="numeric"
+            maxLength={6}
+            error={errors.code?.message}
+            {...register('code')}
+          />
+
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-gray-500">
+              Didn't receive the SMS?
+            </p>
+
+            <button
+              type="button"
+              onClick={handleResendCode}
+              disabled={resending || cooldown > 0}
+              className="text-sm font-semibold text-bloom-500 transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {resending
+                ? 'Sending...'
+                : cooldown > 0
+                  ? `Resend in ${cooldown}s`
+                  : 'Resend Code'}
+            </button>
+          </div>
+
+          {resendMessage && (
+            <p role="status" className="mt-2 text-sm text-green-600">
+              {resendMessage}
+            </p>
+          )}
+
+          {resendError && (
+            <p role="alert" className="mt-2 text-sm text-red-500">
+              {resendError}
+            </p>
+          )}
+        </div>
 
         <Input
           label="Create Password"
@@ -141,7 +221,9 @@ export default function ClaimProviderAccountPage() {
         />
 
         {serverError && (
-          <p className="text-sm text-red-500">{serverError}</p>
+          <p role="alert" className="text-sm text-red-500">
+            {serverError}
+          </p>
         )}
 
         <Button
