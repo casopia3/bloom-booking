@@ -368,11 +368,21 @@ if (enforceCooldown) {
 
   const msisdn = user.phone.replace(/^\+/, '');
 
-  const message =
-    `Bloom Booking: Your provider account claim code is ${code}. ` +
-    `It expires in ${OTP_TTL_MINUTES} minutes. Do not share this code.`;
+ 
+const frontendUrl = (
+  this.config.get<string>('FRONTEND_URL') ||
+  'https://bloom-booking.vercel.app'
+).replace(/\/+$/, '');
 
-  await this.smsService.sendSms(msisdn, message);
+const claimUrl = `${frontendUrl}/provider-application?stage=claim`;
+
+const message =
+  `Bloom Booking: Your provider claim code is ${code}. ` +
+  `Expires in ${OTP_TTL_MINUTES} minutes. Do not share it. ` +
+  `Claim your account: ${claimUrl}`;
+
+await this.smsService.sendSms(msisdn, message);
+
 
   if (this.config.get('NODE_ENV') !== 'production') {
     console.log(
