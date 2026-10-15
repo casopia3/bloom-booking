@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -34,7 +34,7 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-export default function ProviderApplicationPage() {
+function ProviderApplicationContent() {
   const searchParams = useSearchParams();
   const stage = searchParams.get('stage');
 
@@ -327,5 +327,18 @@ export default function ProviderApplicationPage() {
         </div>
       </section>
     </main>
+  );
+}
+export default function ProviderApplicationPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-white">
+          <p className="text-gray-500">Loading provider page...</p>
+        </main>
+      }
+    >
+      <ProviderApplicationContent />
+    </Suspense>
   );
 }
