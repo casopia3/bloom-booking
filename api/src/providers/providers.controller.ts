@@ -176,7 +176,17 @@ addGalleryImage(
     user,
   );
 }
-
+      
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.PROVIDER_ADMIN, UserRole.SUPER_ADMIN)
+  @Delete(':id/gallery/:imageId')
+  deleteGalleryImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @CurrentUser() user: { userId: string; role: UserRole },
+  ) {
+    return this.providersService.deleteGalleryImage(id, imageId, user);
+  }
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PROVIDER_ADMIN, UserRole.SUPER_ADMIN)
   @Post(':id/availability')

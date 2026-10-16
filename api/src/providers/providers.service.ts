@@ -162,7 +162,30 @@ export class ProvidersService {
       data: { serviceProviderId: providerId, url },
     });
   }
+     async deleteGalleryImage(
+    providerId: string,
+    imageId: string,
+    requester: RequestingUser,
+  ) {
+    await this.assertOwnerOrSuperAdmin(providerId, requester);
 
+    const image = await this.prismaClient.providerImage.findFirst({
+      where: {
+        id: imageId,
+        serviceProviderId: providerId,
+      },
+    });
+
+    if (!image) {
+      throw new NotFoundException('Gallery image not found');
+    }
+
+    await this.prismaClient.providerImage.delete({
+      where: { id: imageId },
+    });
+
+    return { message: 'Gallery image removed successfully' };
+  }
   async setAvailability(providerId: string, dto: SetAvailabilityDto, requester: RequestingUser) {
     await this.assertOwnerOrSuperAdmin(providerId, requester);
 

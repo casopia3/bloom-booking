@@ -561,7 +561,14 @@ isFavourite: (providerId: string) =>
 
   return res.json() as Promise<{ id: string; url: string }>;
 },
-
+        deleteGalleryImage: (providerId: string, imageId: string) =>
+      request<{ message: string }>(
+        `/providers/${providerId}/gallery/${imageId}`,
+        {
+          method: 'DELETE',
+          headers: authHeader(),
+        },
+      ),
     update: (
       id: string,
       payload: Partial<{

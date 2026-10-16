@@ -34,6 +34,8 @@ const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
 const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 const [addingPhoto, setAddingPhoto] = useState(false);
 const [photoError, setPhotoError] = useState<string | null>(null);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+const [photoSuccess, setPhotoSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -181,6 +183,7 @@ async function handleAddPhoto() {
   setPhotoError(null);
 
   try {
+    setPhotoSuccess(null);
     await api.providers.uploadGalleryImage(
       provider.id,
       selectedPhoto,
@@ -189,6 +192,7 @@ async function handleAddPhoto() {
     const refreshed = await api.providers.getMine();
 
     setProvider(refreshed);
+    setPhotoSuccess('Photo uploaded successfully.');
     setSelectedPhoto(null);
     setPhotoPreview(null);
 
@@ -205,7 +209,35 @@ async function handleAddPhoto() {
     setAddingPhoto(false);
   }
 }
+   async function handleRemovePhoto(imageId: string) {
+  if (!provider || deletingPhotoId) return;
 
+  const confirmed = window.confirm(
+    'Are you sure you want to remove this photo?'
+  );
+
+  if (!confirmed) return;
+
+  setDeletingPhotoId(imageId);
+  setPhotoError(null);
+  setPhotoSuccess(null);
+
+  try {
+    await api.providers.deleteGalleryImage(provider.id, imageId);
+
+    const refreshed = await api.providers.getMine();
+    setProvider(refreshed);
+    setPhotoSuccess('Photo removed successfully.');
+  } catch (err) {
+    setPhotoError(
+      err instanceof ApiError
+        ? err.message
+        : 'Could not remove this photo.'
+    );
+  } finally {
+    setDeletingPhotoId(null);
+  }
+}
   if (isLoading) {
     return (
       <p className="text-gray-500">
@@ -362,24 +394,50 @@ async function handleAddPhoto() {
     Photos
   </label>
 
-  {/* Existing gallery images */}
-  {(provider.galleryImages?.length ?? 0) > 0 && (
-    <div className="mb-4 flex flex-wrap gap-3">
-      {provider.galleryImages?.map((img) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={img.id}
-          src={
-            img.url.startsWith('http')
-              ? img.url
-              : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}${img.url}`
-          }
-          alt="Business gallery"
-          className="h-24 w-24 rounded-xl border border-bloom-100 object-cover"
-        />
-      ))}
-    </div>
-  )}
+ {/* Existing gallery images */}
+{(provider.galleryImages?.length ?? 0) > 0 ? (
+  <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+    {provider.galleryImages.map((img) => (
+      <div
+        key={img.id}
+        className="overflow-hidden rounded-xl border border-bloom-100 bg-white"
+      >
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={
+              img.url.startsWith('http')
+                ? img.url
+                : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}${img.url}`
+            }
+            alt={`${businessName} gallery`}
+            className="h-32 w-full object-cover"
+            onError={(event) => {
+              event.currentTarget.style.opacity = '0.25';
+            }}
+          />
+        </div>
+
+        <div className="p-2">
+          <button
+            type="button"
+            onClick={() => handleRemovePhoto(img.id)}
+            disabled={deletingPhotoId !== null || addingPhoto}
+            className="w-full rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+          >
+            {deletingPhotoId === img.id
+              ? 'Removing…'
+              : 'Remove photo'}
+          </button>
+        </div>
+      </div>
+    ))}
+  </div>
+) : (
+  <p className="mb-4 rounded-lg bg-bloom-50 p-4 text-sm text-gray-500">
+    No gallery photos yet. Upload your first salon photo below.
+  </p>
+)}
 
   {/* Hidden file input */}
   <input
@@ -442,6 +500,11 @@ async function handleAddPhoto() {
       {photoError}
     </p>
   )}
+  {photoSuccess && (
+  <p className="mt-2 text-sm text-green-600">
+    {photoSuccess}
+  </p>
+)}
 
   {/* Upload button */}
   {selectedPhoto && (
