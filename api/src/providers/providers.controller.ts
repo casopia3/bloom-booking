@@ -13,9 +13,9 @@ import {
 } from '@nestjs/common';
 
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import { randomUUID } from 'crypto';
+import { memoryStorage } from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
+import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -127,58 +127,100 @@ isFavourite(
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.PROVIDER_ADMIN, UserRole.SUPER_ADMIN)
-@Post(':id/gallery')
-@UseInterceptors(
-  FileInterceptor('file', {
-    storage: diskStorage({
-      destination: './uploads/providers',
-      filename: (_req, file, cb) => {
-        const extension = extname(file.originalname).toLowerCase();
-        cb(null, `${randomUUID()}${extension}`);
-      },
-    }),
-    fileFilter: (_req, file, cb) => {
-      const allowedTypes = [
-        'image/jpeg',
-        'image/png',
-        'image/webp',
-        'image/gif',
-      ];
-
-      if (allowedTypes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        cb(
-          new Error('Only JPG, PNG, WEBP, and GIF images are allowed.'),
-          false,
-        );
-      }
-    },
-    limits: {
-      fileSize: 5 * 1024 * 1024,
-    },
-  }),
-)
-addGalleryImage(
-  @Param('id') id: string,
-  @UploadedFile() file: Express.Multer.File,
-  @CurrentUser() user: { userId: string; role: UserRole },
-) {
-  if (!file) {
-    throw new Error('Image file is required.');
-  }
-
-  const imageUrl = `/uploads/providers/${file.filename}`;
-
-  return this.providersService.addGalleryImage(
-    id,
-    imageUrl,
-    user,
-  );
-}
-      
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PROVIDER_ADMIN, UserRole.SUPER_ADMIN)
+  @Post(':id/gallery')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      fileFilter: (_req, file, cb) => {
+        const allowedTypes = [
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'image/gif',
+        ];
+
+        if (allowedTypes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(
+            new BadRequestException(
+              'Only JPG, PNG, WEBP, and GIF images are allowed.',
+            ),
+            false,
+          );
+        }
+      },
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+    }),
+  )
+  async addGalleryImage(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: { userId: string; role: UserRole },
+  ) {
+    if (!file) {
+      throw new BadRequestException('A valid image file is required.');
+    }
+
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+    if (!cloudName || !apiKey || !apiSecret) {
+      throw new InternalServerErrorException(
+        'Cloud image storage is not configured.',
+      );
+    }
+
+    cloudinary.config({
+      cloud_name: cloudName,
+      api_key: apiKey,
+      api_secret: apiSecret,
+      secure: true,
+    });
+
+    const uploadResult = await new Promise<{
+      secure_url: string;
+      public_id: string;
+    }>((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'bloom-booking/providers',
+          resource_type: 'image',
+        },
+        (error, result) => {
+          if (error || !result) {
+            reject(error ?? new Error('Cloudinary upload failed.'));
+            return;
+          }
+
+          resolve({
+            secure_url: result.secure_url,
+            public_id: result.public_id,
+          });
+        },
+      );
+
+      stream.end(file.buffer);
+    });
+
+    try {
+return await (this.providersService as any).addGalleryImage(
+  id,
+  uploadResult.secure_url,
+  user,
+  uploadResult.public_id,
+);
+    } catch (error) {
+      // Avoid leaving an orphaned cloud image if the database insert fails.
+      await cloudinary.uploader.destroy(uploadResult.public_id).catch(() => {});
+      throw error;
+    }
+  }
   @Delete(':id/gallery/:imageId')
   deleteGalleryImage(
     @Param('id') id: string,

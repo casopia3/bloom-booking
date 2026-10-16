@@ -144,6 +144,7 @@ model ProviderImage {
   serviceProviderId String
   provider          ServiceProvider @relation(fields: [serviceProviderId], references: [id])
   url               String
+  cloudinaryPublicId String?        @unique
   createdAt         DateTime        @default(now())
 }
 

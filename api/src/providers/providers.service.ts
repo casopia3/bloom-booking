@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
@@ -9,7 +10,7 @@ import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
 import { SetAvailabilityDto } from './dto/set-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
-
+import { v2 as cloudinary } from 'cloudinary';
 interface RequestingUser {
   userId: string;
   role: UserRole;
@@ -155,37 +156,62 @@ export class ProvidersService {
       data: { ...dto, category: dto.category ?? [] },
     });
   }
+async deleteGalleryImage(
+  providerId: string,
+  imageId: string,
+  requester: RequestingUser,
+) {
+  await this.assertOwnerOrSuperAdmin(providerId, requester);
 
-  async addGalleryImage(providerId: string, url: string, requester: RequestingUser) {
-    await this.assertOwnerOrSuperAdmin(providerId, requester);
-    return this.prismaClient.providerImage.create({
-      data: { serviceProviderId: providerId, url },
-    });
+  const image = await this.prismaClient.providerImage.findFirst({
+    where: {
+      id: imageId,
+      serviceProviderId: providerId,
+    },
+  });
+
+  if (!image) {
+    throw new NotFoundException('Gallery image not found');
   }
-     async deleteGalleryImage(
-    providerId: string,
-    imageId: string,
-    requester: RequestingUser,
-  ) {
-    await this.assertOwnerOrSuperAdmin(providerId, requester);
 
-    const image = await this.prismaClient.providerImage.findFirst({
-      where: {
-        id: imageId,
-        serviceProviderId: providerId,
-      },
-    });
+  // Older images may not have a Cloudinary public ID.
+  if (image.cloudinaryPublicId) {
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-    if (!image) {
-      throw new NotFoundException('Gallery image not found');
+    if (!cloudName || !apiKey || !apiSecret) {
+      throw new InternalServerErrorException(
+        'Cloud image storage is not configured.',
+      );
     }
 
-    await this.prismaClient.providerImage.delete({
-      where: { id: imageId },
+    cloudinary.config({
+      cloud_name: cloudName,
+      api_key: apiKey,
+      api_secret: apiSecret,
+      secure: true,
     });
 
-    return { message: 'Gallery image removed successfully' };
+    const result = await cloudinary.uploader.destroy(
+      image.cloudinaryPublicId,
+      { resource_type: 'image' },
+    );
+
+    if (result.result !== 'ok' && result.result !== 'not found') {
+      throw new InternalServerErrorException(
+        'Could not remove the image from cloud storage.',
+      );
+    }
   }
+
+  await this.prismaClient.providerImage.delete({
+    where: { id: imageId },
+  });
+
+  return { message: 'Gallery image removed successfully' };
+}
+
   async setAvailability(providerId: string, dto: SetAvailabilityDto, requester: RequestingUser) {
     await this.assertOwnerOrSuperAdmin(providerId, requester);
 
