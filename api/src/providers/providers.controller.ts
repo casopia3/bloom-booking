@@ -124,8 +124,10 @@ isFavourite(
   ) {
     return this.providersService.update(id, dto, user);
   }
-  @Post(':id/gallery')
-  @UseInterceptors(
+ @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.PROVIDER_ADMIN, UserRole.SUPER_ADMIN)
+@Post(':id/gallery')
+@UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
       fileFilter: (_req, file, cb) => {
