@@ -124,11 +124,6 @@ isFavourite(
   ) {
     return this.providersService.update(id, dto, user);
   }
-
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.PROVIDER_ADMIN, UserRole.SUPER_ADMIN)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.PROVIDER_ADMIN, UserRole.SUPER_ADMIN)
   @Post(':id/gallery')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -221,6 +216,9 @@ return await (this.providersService as any).addGalleryImage(
       throw error;
     }
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.PROVIDER_ADMIN, UserRole.SUPER_ADMIN)
   @Delete(':id/gallery/:imageId')
   deleteGalleryImage(
     @Param('id') id: string,
@@ -229,6 +227,7 @@ return await (this.providersService as any).addGalleryImage(
   ) {
     return this.providersService.deleteGalleryImage(id, imageId, user);
   }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PROVIDER_ADMIN, UserRole.SUPER_ADMIN)
   @Post(':id/availability')
