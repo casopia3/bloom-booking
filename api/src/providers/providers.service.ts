@@ -156,6 +156,31 @@ export class ProvidersService {
       data: { ...dto, category: dto.category ?? [] },
     });
   }
+    async addGalleryImage(
+  providerId: string,
+  imageUrl: string,
+  requester: RequestingUser,
+  cloudinaryPublicId?: string,
+) {
+  await this.assertOwnerOrSuperAdmin(providerId, requester);
+
+  const provider = await this.prismaClient.serviceProvider.findUnique({
+    where: { id: providerId },
+    select: { id: true },
+  });
+
+  if (!provider) {
+    throw new NotFoundException('Provider not found');
+  }
+
+  return this.prismaClient.providerImage.create({
+    data: {
+      serviceProviderId: providerId,
+      url: imageUrl,
+      cloudinaryPublicId,
+    },
+  });
+}
 async deleteGalleryImage(
   providerId: string,
   imageId: string,

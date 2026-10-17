@@ -204,7 +204,7 @@ isFavourite(
     });
 
     try {
-return await (this.providersService as any).addGalleryImage(
+return await this.providersService.addGalleryImage(
   id,
   uploadResult.secure_url,
   user,
