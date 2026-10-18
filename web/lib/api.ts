@@ -33,6 +33,30 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   return data as T;
 }
+ async function uploadRequest<T>(
+  path: string,
+  formData: FormData,
+): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      ...authHeader(),
+    },
+    body: formData,
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const message = Array.isArray(data.message)
+      ? data.message.join(', ')
+      : data.message || 'Image upload failed';
+
+    throw new ApiError(message, res.status);
+  }
+
+  return data as T;
+}  
 
 export interface Provider {
   id: string;
@@ -408,6 +432,15 @@ resendClaimCode: (payload: { phone: string }) =>
       }),
   },
 promotions: {
+  uploadImage: (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return uploadRequest<{
+    imageUrl: string;
+    publicId: string;
+  }>('/admin/promotions/upload-image', formData);
+},
   findAll: () => request<Promotion[]>('/promotions', {
       headers: authHeader(),
     }),

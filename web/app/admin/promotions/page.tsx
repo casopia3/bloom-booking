@@ -341,26 +341,65 @@ export default function AdminPromotionsPage() {
               />
             </div>
 
-            {/* Image */}
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Image URL
-              </label>
+           {/* Promotion Image Upload */}
+<div>
+  <label className="mb-2 block text-sm font-medium text-gray-700">
+    Promotion Image
+  </label>
 
-              <input
-                type="url"
-                value={form.imageUrl}
-                onChange={(e) =>
-                  updateField('imageUrl', e.target.value)
-                }
-                placeholder="https://example.com/promotion.jpg"
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-bloom-500 focus:ring-2 focus:ring-bloom-100"
-              />
+  <input
+    type="file"
+    accept="image/jpeg,image/png,image/webp,image/gif"
+    disabled={isSaving}
+    onChange={async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
 
-              <p className="mt-1 text-xs text-gray-400">
-                Use a public image URL that customers can access.
-              </p>
-            </div>
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Image must be 5 MB or smaller.');
+        event.target.value = '';
+        return;
+      }
+
+      setError(null);
+      setIsSaving(true);
+
+      try {
+        const result = await api.promotions.uploadImage(file);
+
+        updateField('imageUrl', result.imageUrl);
+      } catch (err) {
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : 'Failed to upload promotion image.',
+        );
+      } finally {
+        setIsSaving(false);
+        event.target.value = '';
+      }
+    }}
+    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
+  />
+
+  <p className="mt-1 text-xs text-gray-400">
+    Choose a JPG, PNG, WEBP, or GIF image. Maximum size: 5 MB.
+  </p>
+
+  {form.imageUrl && (
+    <div className="mt-3">
+      <img
+        src={form.imageUrl}
+        alt="Promotion preview"
+        className="h-40 w-full rounded-xl object-cover"
+      />
+
+      <p className="mt-2 break-all text-xs text-green-700">
+        Image uploaded successfully.
+      </p>
+    </div>
+  )}
+</div>
 
             {/* Button + Category */}
             <div className="grid gap-5 md:grid-cols-2">
